@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>나만의 날씨예보</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="main-style.css" />
+</head>
+<body>
+    <div class="main-container">
+        <header class="main-header">
+            <h1 class="main-title">☀️ Today Weather ☀️</h1>
+            <p class="main-subtitle">24016008 김서린</p>
+        </header>
+        
+        <main class="search-container">
+            <div class="search-box">
+                <label for="cityInput" class="sr-only">도시 검색</label>
+                <input
+                    type="text"
+                    id="cityInput"
+                    placeholder="어느 도시의 날씨를 알려드릴까요?☺️ (예: 서울, Seoul)"
+                />
+                <button id="searchBtn" class="search-btn">검색</button>
+            </div>
+            
+            <!-- 현재 위치 버튼 추가 -->
+            <div class="location-section">
+                <button id="locationBtn" class="location-btn">📍 현재 내 위치</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const cityInput = document.querySelector("#cityInput");
+        const searchBtn = document.querySelector("#searchBtn");
+        const locationBtn = document.querySelector("#locationBtn");
+
+        function handleSearch() {
+            const city = cityInput.value.trim();
+            if (city) {
+                window.location.href = `index.html?city=${encodeURIComponent(city)}`;
+            }
+        }
+
+        function handleLocationSearch() {
+            console.log('위치 버튼 클릭됨');
+            
+            if (navigator.geolocation) {
+                locationBtn.textContent = "🔄 위치 확인 중...";
+                locationBtn.disabled = true;
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        console.log('위치 정보 획득 성공:', position.coords);
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        console.log(`이동할 URL: index.html?lat=${lat}&lon=${lon}`);
+                        window.location.href = `index.html?lat=${lat}&lon=${lon}`;
+                    },
+                    (error) => {
+                        console.error('위치 오류 상세:', error);
+                        locationBtn.textContent = "📍 현재 내 위치";
+                        locationBtn.disabled = false;
+                        
+                        let errorMessage = "위치 정보를 가져올 수 없습니다.";
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = "위치 권한이 거부되었습니다. 브라우저 설정을 확인해주세요.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = "위치 정보를 사용할 수 없습니다.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = "위치 요청 시간이 초과되었습니다.";
+                                break;
+                        }
+                        
+                        alert(errorMessage);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 300000
+                    }
+                );
+            } else {
+                alert("이 브라우저는 위치 서비스를 지원하지 않습니다.");
+            }
+        }
+
+        searchBtn.addEventListener("click", handleSearch);
+        locationBtn.addEventListener("click", handleLocationSearch);
+        
+        cityInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                handleSearch();
+            }
+        });
+    </script>
+</body>
+</html>

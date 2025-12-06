@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>날씨예보 웹사이트</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const city = params.get('city');
+        const lat = params.get('lat');
+        const lon = params.get('lon');
+        
+        // 도시명도 위도/경도도 없으면 메인 페이지로 리다이렉트
+        if ((!city || city.trim() === '') && (!lat || !lon)) {
+            window.location.replace('main.html');
+        }
+    </script>
+</head>
+<body>
+    <header class="header">
+        <div class="logo" id="logoLink" style="cursor: pointer;">
+            <span class="logo-main">☀️ Today Weather ☀️</span>
+            <span class="logo-sub">24016008 김서린</span>
+        </div>
+        <button id="unitToggle" class="btn ghost">℃ / ℉</button>
+    </header>
+
+    <main class="container">
+        <section class="search-section">
+            <input type="text" id="cityInput" placeholder="어느 도시의 날씨를 알려드릴까요?☺️ (예: 서울, Seoul)" />
+            <button id="searchBtn" class="btn primary">검색</button>
+        </section>
+
+        <section class="recent-section">
+            <h2>최근 검색</h2>
+            <div id="recentList" class="chip-list"></div>
+        </section>
+
+        <section id="errorBox" class="error hidden"></section>
+
+        <section id="currentWeather" class="card current">
+            <h2>현재 날씨</h2>
+            <div class="current-main">
+                <div class="current-left">
+                    <div id="cityName" class="city-name">---</div>
+                    <div id="description" class="description">---</div>
+                    <div class="temp-row">
+                        <span id="temp" class="temp">--°</span>
+                    </div>
+                    <div class="current-extra">
+                        <span>습도: <span id="humidity">--%</span></span>
+                        <span>바람: <span id="wind">-- m/s</span></span>
+                    </div>
+                </div>
+                <div class="current-right">
+                    <img id="icon" class="weather-icon" src="" alt="날씨 아이콘" />
+                </div>
+            </div>
+        </section>
+
+        <section id="forecastSection" class="card forecast">
+            <h2>3일 예보</h2>
+            <div id="forecastList" class="forecast-list"></div>
+        </section>
+
+        <section id="airPollutionSection" class="card air-pollution hidden">
+            <h2>대기질 정보</h2>
+            <div class="air-quality-main">
+                <div class="aqi-status">
+                    <span id="aqiLevel" class="aqi-level">---</span>
+                    <span id="aqiDescription" class="aqi-description">측정 중...</span>
+                </div>
+                <div class="pollutant-details">
+                    <div class="pollutant-item">
+                        <span class="pollutant-label">PM2.5 (초미세먼지)</span>
+                        <span id="pm25" class="pollutant-value">-- μg/m³</span>
+                    </div>
+                    <div class="pollutant-item">
+                        <span class="pollutant-label">PM10 (미세먼지)</span>
+                        <span id="pm10" class="pollutant-value">-- μg/m³</span>
+                    </div>
+                    <div class="pollutant-item">
+                        <span class="pollutant-label">O3 (오존)</span>
+                        <span id="o3" class="pollutant-value">-- μg/m³</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="extraFeature" class="card">
+            <h2>오늘의 추천 옷차림</h2>
+            <p id="outfitText">선선하다. 가디건, 맨투맨, 얇은 자켓 하나 챙기자.</p>
+        </section>
+
+        <section id="mapSection" class="card map-section hidden">
+            <h2>📍 지역 위치</h2>
+            <div id="map" class="map-container"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>데이터 제공: OpenWeatherMap</p>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -14,14 +14,17 @@ OpenWeather API를 사용하여, 사용자가 검색한 도시의 현재 날씨�
 5. 단위 전환 기능: 섭씨 ↔ 화씨 변환 버튼 <br>
 6. 시각적 변화 기능: 날씨/시간에 따른 배경/아이콘 변화 <br>
 7. 오류 처리 기능: 잘못된 도시 입력, API 호출 실패 메시지 전송 <br> 
-8. 현재 위치 날씨조회 기능 <br>
+8. 현재 위치(GPS) 기반 날씨조회 기능 <br>
+9. 대기질 정보 기능: 직관적인 대기질 정도와 초미세먼지/미세먼지/오존 지수를 표시 <br>
+10. 오늘의 추천 옷차림 기능: 기온에 따른 옷 추천 <br>
+11. 검색 지역 지도 기능: 검색한 지역의 정확한 위치를 보여주기 위해 지도로 표시 <br>
 
 <h3> 📣 사용 기술 </h3>
-1. HTML<br> 
-2. CSS<br>
-3. JavaScript<br>
-4. OpenWeatherMap API<br>
-5. Vercel(배포용)<br>
+1. HTML <br> 
+2. CSS <br>
+3. JavaScript <br>
+4. OpenWeatherMap API <br>
+5. Vercel(배포용) <br>
 
 <h3> 📣 배포 주소 </h3>
 https://github.com/seorin-lab/24016008-

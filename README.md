@@ -27,5 +27,5 @@ OpenWeather API를 사용하여, 사용자가 검색한 도시의 현재 날씨�
 5. Vercel(배포용) <br>
 
 <h3> 📣 배포 주소 </h3>
-https://github.com/seorin-lab/24016008-
+https://github.com/seorin-lab/24016008- <br>
 https://24016008.vercel.app/main.html

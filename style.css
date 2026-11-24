@@ -264,14 +264,7 @@ body[data-theme="night"] .recent-section h2 {
 
 /* 지도 섹션 */
 .map-section {
-    margin-top: 16px;
     display: block !important;
-}
-
-.map-section h2 {
-    margin-bottom: 12px;
-    font-size: 1.2rem;
-    color: #333333;
 }
 
 .map-container {
@@ -301,13 +294,6 @@ body[data-theme="night"] .recent-section h2 {
 
 /* 미세먼지 정보 */
 .air-pollution {
-    margin-top: 16px;
-}
-
-.air-pollution h2 {
-    margin-bottom: 16px;
-    font-size: 1.2rem;
-    color: #333333;
 }
 
 .air-quality-main {
@@ -388,4 +374,18 @@ body[data-theme="night"] .recent-section h2 {
     font-size: 0.75rem;
     color: #666666;
     text-align: right;
+}
+
+/* 카드 제목 통일 (현재 날씨, 3일 예보, 대기질 정보, 추천 옷차림, 지역 위치) */
+.card h2 {
+    margin: 0 0 16px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #333333;
+}
+
+/* 카드 사이 간격은 .container의 gap(16px)으로만 맞추고, 카드 안 마지막 문단의 아래 여백 제거 */
+.card > :last-child {
+    margin-bottom: 0;
 }

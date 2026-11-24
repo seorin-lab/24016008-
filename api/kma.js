@@ -122,17 +122,18 @@ function groupForecast(items) {
     return byDate;
 }
 
-// 오늘·내일·모레 3일 요약 (최저/최고 기온 + 대표 날씨)
+// 오늘(KST) 이후 예보가 있는 첫 3일 요약 (최저/최고 기온 + 대표 날씨)
+// 23시 발표분에는 오늘 데이터가 없으므로 날짜를 고정하지 않고 있는 날짜에서 고른다
 function summarizeDaily(byDate, nowMs, currentTemp) {
+    const today = ymd(kstDate(nowMs));
+    const dates = Object.keys(byDate).sort().filter((d) => d >= today).slice(0, 3);
     const days = [];
-    for (let i = 0; i < 3; i++) {
-        const date = ymd(kstDate(nowMs + i * 24 * 60 * 60 * 1000));
+    for (const date of dates) {
         const hours = byDate[date];
-        if (!hours) continue;
 
         const entries = Object.entries(hours).sort(([a], [b]) => a.localeCompare(b));
         const temps = entries.map(([, v]) => Number(v.TMP)).filter((t) => !Number.isNaN(t));
-        if (i === 0 && typeof currentTemp === "number") temps.push(currentTemp);
+        if (date === today && typeof currentTemp === "number") temps.push(currentTemp);
 
         let tmin = Math.min(...temps);
         let tmax = Math.max(...temps);

@@ -204,16 +204,17 @@ function displayForecast(days) {
     }
 
     forecastListEl.innerHTML = "";
-    const labels = ["오늘", "내일", "모레"];
+    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
-    days.slice(0, 3).forEach((d, index) => {
+    days.slice(0, 3).forEach((d) => {
         const month = Number(d.date.slice(4, 6));
         const day = Number(d.date.slice(6, 8));
+        const weekday = weekdays[new Date(Date.UTC(Number(d.date.slice(0, 4)), month - 1, day)).getUTCDay()];
 
         const forecastItem = document.createElement("div");
         forecastItem.className = "forecast-item";
         forecastItem.innerHTML = `
-            <div>${labels[index] || ""} ${month}/${day}</div>
+            <div>${month}/${day} (${weekday})</div>
             <img src="https://openweathermap.org/img/wn/${d.icon}@2x.png" alt="${d.description}" style="width: 40px; height: 40px;">
             <div>${Math.round(d.tmin)}° / ${Math.round(d.tmax)}°</div>
             <div>${d.description}</div>

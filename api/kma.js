@@ -85,11 +85,11 @@ function toWeather(sky, pty, isDay) {
     return { id: w.id, description: w.description, icon: w.icon + s };
 }
 
-async function callKma(operation, params, serviceKey) {
+async function callKma(operation, params, serviceKey, numOfRows = "1000") {
     const qs = new URLSearchParams({
         serviceKey,
         pageNo: "1",
-        numOfRows: "1000",
+        numOfRows,
         dataType: "JSON",
         ...params,
     });
@@ -107,7 +107,8 @@ async function callKma(operation, params, serviceKey) {
     if (!header || header.resultCode !== "00") {
         throw new Error(`${operation} 결과 오류: ${header ? header.resultMsg : "응답 형식 이상"}`);
     }
-    return json.response.body.items.item;
+    const body = json.response.body;
+    return { items: body.items.item, totalCount: body.totalCount };
 }
 
 // 단기예보 항목 목록 → { "YYYYMMDD": { "HHMM": { TMP, SKY, PTY, TMN, TMX, ... } } }
@@ -156,10 +157,14 @@ function summarizeDaily(byDate, nowMs, currentTemp) {
 async function getKmaWeather(lat, lon, serviceKey, nowMs = Date.now()) {
     const { nx, ny } = latLonToGrid(lat, lon);
 
-    const [ncstItems, fcstItems] = await Promise.all([
+    const vBase = vilageBase(nowMs);
+    // 단기예보는 발표분에 따라 1000개를 넘을 수 있어 넉넉하게 요청 (부족하면 뒷날짜가 잘림)
+    const [ncstRes, fcstRes] = await Promise.all([
         callKma("getUltraSrtNcst", { ...ncstBase(nowMs), nx, ny }, serviceKey),
-        callKma("getVilageFcst", { ...vilageBase(nowMs), nx, ny }, serviceKey),
+        callKma("getVilageFcst", { ...vBase, nx, ny }, serviceKey, "3000"),
     ]);
+    const ncstItems = ncstRes.items;
+    const fcstItems = fcstRes.items;
 
     const ncst = {};
     for (const it of ncstItems) ncst[it.category] = Number(it.obsrValue);
@@ -182,7 +187,19 @@ async function getKmaWeather(lat, lon, serviceKey, nowMs = Date.now()) {
         ...toWeather(nextSlot ? Number(nextSlot.fcstValue) : 1, ncst.PTY || 0, isDay),
     };
 
-    return { source: "kma", grid: { nx, ny }, current, daily: summarizeDaily(byDate, nowMs, current.temp) };
+    return {
+        source: "kma",
+        grid: { nx, ny },
+        current,
+        daily: summarizeDaily(byDate, nowMs, current.temp),
+        // 진단용: 단기예보 발표 시각, 전체 항목 수 / 받은 항목 수, 포함된 날짜
+        meta: {
+            vilageBase: `${vBase.base_date} ${vBase.base_time}`,
+            totalCount: fcstRes.totalCount,
+            received: fcstItems.length,
+            dates: Object.keys(byDate).sort(),
+        },
+    };
 }
 
 module.exports = async function handler(req, res) {

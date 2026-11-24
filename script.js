@@ -175,8 +175,8 @@ function displayCurrentWeather(data) {
     cityNameEl.textContent = name || "---";
     descEl.textContent = weather.description || "---";
     tempEl.textContent = `${Math.round(temp)}°`;
-    humidityEl.textContent = `습도: ${humidity}%`;
-    windEl.textContent = `풍속: ${speed} m/s`;
+    humidityEl.textContent = `${humidity}%`;
+    windEl.textContent = `${Math.round(speed * 10) / 10} m/s`;
 
     iconEl.src = `https://openweathermap.org/img/wn/${weather.icon}@2x.png`;
     iconEl.classList.remove("hidden");
@@ -195,37 +195,117 @@ function displayCurrentWeather(data) {
 }
 
 // UI 업데이트 - 예보
-function displayForecast(data) {
+// days: [{ date: "YYYYMMDD", tmin, tmax, description, icon }] (기온은 현재 단위 기준)
+function displayForecast(days) {
     const forecastListEl = document.querySelector("#forecastList");
-    if (!forecastListEl || !data || !data.list) {
-        console.error("예보 데이터가 없습니다:", data);
+    if (!forecastListEl || !Array.isArray(days)) {
+        console.error("예보 데이터가 없습니다:", days);
         return;
     }
 
     forecastListEl.innerHTML = "";
-    
-    // 3일치 예보 (8시간 간격으로 3개)
-    const dailyData = data.list.slice(0, 3);
-    
-    dailyData.forEach((item, index) => {
-        const date = new Date(item.dt * 1000);
-        const day = `${date.getMonth() + 1}/${date.getDate()}`;
-        
-        const temp = Math.round(item.main.temp);
-        const description = item.weather[0].description;
-        const icon = item.weather[0].icon;
-        
+    const labels = ["오늘", "내일", "모레"];
+
+    days.slice(0, 3).forEach((d, index) => {
+        const month = Number(d.date.slice(4, 6));
+        const day = Number(d.date.slice(6, 8));
+
         const forecastItem = document.createElement("div");
         forecastItem.className = "forecast-item";
         forecastItem.innerHTML = `
-            <div>${day}</div>
-            <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${description}" style="width: 40px; height: 40px;">
-            <div>${temp}°</div>
-            <div>${description}</div>
+            <div>${labels[index] || ""} ${month}/${day}</div>
+            <img src="https://openweathermap.org/img/wn/${d.icon}@2x.png" alt="${d.description}" style="width: 40px; height: 40px;">
+            <div>${Math.round(d.tmin)}° / ${Math.round(d.tmax)}°</div>
+            <div>${d.description}</div>
         `;
-        
         forecastListEl.appendChild(forecastItem);
     });
+}
+
+// OpenWeather 5일/3시간 예보 → 날짜별(현지 시간 기준) 최저/최고 + 정오에 가장 가까운 시각의 날씨
+function openWeatherToDaily(data) {
+    const offset = (data.city && data.city.timezone) || 0; // 초 단위 UTC 오프셋
+    const byDate = {};
+    for (const item of data.list) {
+        const local = new Date((item.dt + offset) * 1000);
+        const date = `${local.getUTCFullYear()}${String(local.getUTCMonth() + 1).padStart(2, "0")}${String(local.getUTCDate()).padStart(2, "0")}`;
+        (byDate[date] = byDate[date] || []).push({ hour: local.getUTCHours(), item });
+    }
+    return Object.keys(byDate).sort().slice(0, 3).map((date) => {
+        const entries = byDate[date];
+        const temps = entries.map((e) => e.item.main.temp);
+        const rep = entries.reduce((a, b) => (Math.abs(b.hour - 12) < Math.abs(a.hour - 12) ? b : a));
+        return {
+            date,
+            tmin: Math.min(...temps),
+            tmax: Math.max(...temps),
+            description: rep.item.weather[0].description,
+            icon: rep.item.weather[0].icon.replace("n", "d"),
+        };
+    });
+}
+
+// ===== 기상청(국내) 연동 =====
+// 국내 좌표면 Vercel 서버 함수(/api/kma)를 통해 기상청 단기예보를 가져온다.
+// 실패하거나 파일로 직접 열었을 때(서버 함수 없음)는 null → OpenWeather 데이터를 그대로 사용
+async function fetchKmaWeather(lat, lon) {
+    if (location.protocol === "file:") return null;
+    try {
+        const res = await fetch(`/api/kma?lat=${lat}&lon=${lon}`);
+        if (!res.ok) {
+            console.warn("기상청 API 실패, OpenWeather 사용:", await res.text());
+            return null;
+        }
+        return await res.json();
+    } catch (err) {
+        console.warn("기상청 API 호출 오류, OpenWeather 사용:", err);
+        return null;
+    }
+}
+
+// 기상청 기온은 섭씨이므로 화씨 모드면 변환
+function fromCelsius(c) {
+    return currentUnits === "imperial" ? c * 9 / 5 + 32 : c;
+}
+
+// 현재 날씨/예보를 화면에 그린다 (국내는 기상청, 해외는 OpenWeather)
+async function renderWeather(current, forecast) {
+    let days = openWeatherToDaily(forecast);
+    let source = "OpenWeather";
+
+    if (current.sys && current.sys.country === "KR" && current.coord) {
+        const kma = await fetchKmaWeather(current.coord.lat, current.coord.lon);
+        if (kma && kma.current && typeof kma.current.temp === "number") {
+            // 기존 화면 코드를 그대로 쓰기 위해 OpenWeather 응답 형식에 기상청 값을 덮어쓴다
+            current.main.temp = fromCelsius(kma.current.temp);
+            current.main.humidity = kma.current.humidity;
+            current.wind.speed = kma.current.wind;
+            current.weather[0] = { id: kma.current.id, description: kma.current.description, icon: kma.current.icon };
+            if (kma.daily && kma.daily.length) {
+                days = kma.daily.map((d) => ({ ...d, tmin: fromCelsius(d.tmin), tmax: fromCelsius(d.tmax) }));
+            }
+            source = "기상청 단기예보";
+        }
+    }
+
+    displayCurrentWeather(current);
+    displayForecast(days);
+
+    const sourceEl = document.querySelector("#dataSource");
+    if (sourceEl) sourceEl.textContent = `출처: ${source}`;
+
+    // 미세먼지 정보 (OpenWeather, 좌표 필요)
+    if (current.coord) {
+        try {
+            const airPollution = await fetchAirPollution(current.coord.lat, current.coord.lon);
+            displayAirPollution(airPollution);
+        } catch (err) {
+            console.error("미세먼지 정보를 가져올 수 없습니다:", err);
+        }
+    }
+
+    lastCity = current.name;
+    lastCityEnglish = current.name;
 }
 
 // 추천 옷차림
@@ -270,26 +350,23 @@ async function handleSearch(cityFromClick) {
 
     clearError();
     try {
-        const [current, forecast] = await Promise.all([
-            fetchWeather(city),
-            fetchForecast(city), 
-        ]);
-
-        displayCurrentWeather(current);
-        displayForecast(forecast);
-
-        // 미세먼지 정보 가져오기 (좌표 필요)
-        if (current.coord) {
-            try {
-                const airPollution = await fetchAirPollution(current.coord.lat, current.coord.lon);
-                displayAirPollution(airPollution);
-            } catch (err) {
-                console.error("미세먼지 정보를 가져올 수 없습니다:", err);
-            }
+        let current, forecast;
+        try {
+            [current, forecast] = await Promise.all([
+                fetchWeather(city),
+                fetchForecast(city),
+            ]);
+        } catch (nameErr) {
+            // 이름으로 못 찾으면 지오코딩 API로 좌표를 찾아서 다시 조회 (한글 지명도 지원)
+            console.warn(`"${city}" 이름 검색 실패, 좌표 검색으로 재시도`);
+            const geo = await geocodeCity(rawCity);
+            [current, forecast] = await Promise.all([
+                fetchWeatherByCoords(geo.lat, geo.lon),
+                fetchForecastByCoords(geo.lat, geo.lon),
+            ]);
         }
 
-        lastCity = current.name;
-        lastCityEnglish = current.name;
+        await renderWeather(current, forecast);
         addRecentCity(rawCity);
     } catch (err) {
         console.error(err);
@@ -382,6 +459,18 @@ const cityNameMap = {
     "화성": "Hwaseong",
     "평택": "Pyeongtaek",
     "의정부": "Uijeongbu",
+    "제주": "Jeju",
+    "제주도": "Jeju",
+    "제주시": "Jeju",
+    "서귀포": "Seogwipo",
+    "강릉": "Gangneung",
+    "춘천": "Chuncheon",
+    "포항": "Pohang",
+    "경주": "Gyeongju",
+    "여수": "Yeosu",
+    "목포": "Mokpo",
+    "창원": "Changwon",
+    "김해": "Gimhae",
     
     // 세계 주요 도시
     "도쿄": "Tokyo",
@@ -485,39 +574,34 @@ function displayAirPollution(data) {
     console.log("미세먼지 정보 표시 완료:", aqi, aqiNames[aqi]);
 }
 
-// 좌표 기반 날씨 검색 함수 (fetchWeather 함수 다음에 추가)
+// 좌표 기반 날씨 검색 함수
 async function handleLocationSearch(lat, lon) {
     try {
         clearError();
         console.log('좌표 기반 검색 시작:', lat, lon);
-        
-        // 좌표로 현재 날씨 가져오기
+
         const [current, forecast] = await Promise.all([
             fetchWeatherByCoords(lat, lon),
             fetchForecastByCoords(lat, lon)
         ]);
 
-        console.log('날씨 데이터 받음:', current);
-        
-        displayCurrentWeather(current);
-        displayForecast(forecast);
-
-        // 미세먼지 정보 가져오기
-        try {
-            const airPollution = await fetchAirPollution(lat, lon);
-            displayAirPollution(airPollution);
-        } catch (err) {
-            console.error("미세먼지 정보를 가져올 수 없습니다:", err);
-        }
-
-        lastCity = current.name;
-        lastCityEnglish = current.name;
+        await renderWeather(current, forecast);
         addRecentCity(current.name);
-        
     } catch (err) {
         console.error('위치 기반 검색 오류:', err);
         showError("현재 위치의 날씨 정보를 가져올 수 없습니다.");
     }
+}
+
+// 도시 이름 → 좌표 (OpenWeather 지오코딩 API, 한글 지명 검색 가능)
+async function geocodeCity(name) {
+    const res = await fetch(
+        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(name)}&limit=1&appid=${API_KEY}`
+    );
+    if (!res.ok) throw new Error(`지오코딩 실패: ${res.status}`);
+    const list = await res.json();
+    if (!list.length) throw new Error("도시를 찾을 수 없습니다.");
+    return { lat: list[0].lat, lon: list[0].lon };
 }
 
 // 좌표로 현재 날씨 가져오기
@@ -591,10 +675,20 @@ function displayMap(lat, lon, cityName) {
             });
             
             // 타일 레이어 추가
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
+            // OSM 타일 서버는 Referer 없는 요청(file:// 로 파일을 직접 열었을 때)을 403으로 차단한다.
+            // 배포 사이트(https)·로컬 서버(http)에서는 OSM을, 파일로 직접 열었을 때만 OSM 독일 서버 타일을 사용
+            // (Esri는 한국 상세 지도가 없고, OSM France(HOT)는 응답이 1~10초로 너무 느림)
+            if (location.protocol === 'file:') {
+                L.tileLayer('https://tile.openstreetmap.de/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles by <a href="https://openstreetmap.de/">OSM Deutschland</a>'
+                }).addTo(map);
+            } else {
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+            }
             
             // 마커 추가
             L.marker([lat, lon]).addTo(map)

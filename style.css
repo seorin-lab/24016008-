@@ -382,3 +382,10 @@ body[data-theme="night"] .recent-section h2 {
         width: 100%;
     }
 }
+/* 데이터 출처 표시 (기상청 / OpenWeather) */
+.data-source {
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: #666666;
+    text-align: right;
+}

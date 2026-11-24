@@ -108,7 +108,7 @@ async function callKma(operation, params, serviceKey, numOfRows = "1000") {
         throw new Error(`${operation} 결과 오류: ${header ? header.resultMsg : "응답 형식 이상"}`);
     }
     const body = json.response.body;
-    return { items: body.items.item, totalCount: body.totalCount };
+    return { items: body.items.item };
 }
 
 // 단기예보 항목 목록 → { "YYYYMMDD": { "HHMM": { TMP, SKY, PTY, TMN, TMX, ... } } }
@@ -193,13 +193,6 @@ async function getKmaWeather(lat, lon, serviceKey, nowMs = Date.now()) {
         grid: { nx, ny },
         current,
         daily: summarizeDaily(byDate, nowMs, current.temp),
-        // 진단용: 단기예보 발표 시각, 전체 항목 수 / 받은 항목 수, 포함된 날짜
-        meta: {
-            vilageBase: `${vBase.base_date} ${vBase.base_time}`,
-            totalCount: fcstRes.totalCount,
-            received: fcstItems.length,
-            dates: Object.keys(byDate).sort(),
-        },
     };
 }
 

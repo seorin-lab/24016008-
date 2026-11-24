@@ -10,7 +10,7 @@
 <h3> 📣 주요 기능 </h3>
 1. 도시 검색 기능: 도시 이름으로 실시간 날씨 검색(한국어/영어 검색 가능하다), 이름으로 찾지 못하면 지명 검색(Geocoding)으로 다시 조회 <br>
 2. API 연동 기능: 국내는 기상청 단기예보, 해외는 OpenWeather를 사용하며, 기상청 호출 실패 시 OpenWeather로 자동 대체 <br>
-3. 날씨 표시 기능: 현재 온도, 상태, 아이콘, 습도, 풍속 표시 <br>
+3. 날씨 표시 기능: 현재 온도, 상태, 아이콘, 습도, 풍속 표시, 도시 이름은 한글로 표시 <br>
 4. 예보 카드 기능: 3일 예보 생성, 날짜(요일)/최저·최고 온도/상태 아이콘 표시 <br>
 5. 단위 전환 기능: 섭씨 ↔ 화씨 변환 버튼 <br>
 6. 시각적 변화 기능: 날씨/시간에 따른 배경/아이콘 변화 <br>
@@ -30,11 +30,15 @@
 6. Leaflet + OpenStreetMap (지도) <br>
 7. Vercel(배포 및 서버리스 함수) <br>
 
-<h3> 📣 기상청 API 설정 </h3>
-기상청 API는 브라우저에서 직접 호출하면 CORS로 막히고 인증키가 노출되므로, Vercel 서버리스 함수(<code>api/kma.js</code>)를 통해 호출한다. <br>
-1. 공공데이터포털에서 「기상청_단기예보 조회서비스」 활용 신청 후 인증키 발급 <br>
-2. Vercel 프로젝트 Settings → Environment Variables에 <code>KMA_SERVICE_KEY</code> 이름으로 인증키 등록 <br>
+<h3> 📣 API 키 설정 </h3>
+API 키가 브라우저 코드에 노출되지 않도록 모든 날씨 API는 Vercel 서버리스 함수를 통해 호출한다. <br>
+(<code>api/ow.js</code>: OpenWeather, <code>api/kma.js</code>: 기상청) <br>
+1. OpenWeather에서 API 키 발급, 공공데이터포털에서 「기상청_단기예보 조회서비스」 활용 신청 후 인증키 발급 <br>
+2. Vercel 프로젝트 Settings → Environment Variables에 아래 두 값을 등록 <br>
+&nbsp;&nbsp;- <code>OPENWEATHER_API_KEY</code>: OpenWeather API 키 <br>
+&nbsp;&nbsp;- <code>KMA_SERVICE_KEY</code>: 기상청 인증키 <br>
 3. 재배포 후 <code>/api/kma?lat=37.5665&lon=126.978</code> 에서 <code>"source":"kma"</code> 응답 확인 <br>
+※ 서버 함수를 사용하므로 로컬에서는 파일을 직접 열지 않고 <code>vercel dev</code>로 실행한다. <br>
 
 <h3> 📣 배포 주소 </h3>
 https://github.com/seorin-lab/24016008- <br>

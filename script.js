@@ -1,9 +1,9 @@
 // 기본 설정
-const API_KEY = "52a950fa1c64eff9a9b1961314e600d2";
-const BASE_URL = "https://api.openweathermap.org/data/2.5";
+// OpenWeather API 키는 브라우저에 두지 않고 Vercel 서버 함수(/api/ow)에서 붙인다
 
 let currentUnits = "metric"; // "metric" = 섭씨, "imperial" = 화씨
 let lastCity = null;
+let lastCoords = null; // 단위 전환 시 같은 위치로 다시 조회하기 위해 저장
 
 // 전역 변수에 영어 도시명도 저장
 let lastCityEnglish = null;
@@ -111,63 +111,37 @@ function renderRecentCities() {
 }
 
 // API 호출
-async function fetchWeather(city) {
-    const url = `${BASE_URL}/weather?q=${encodeURIComponent(
-        city
-    )}&appid=${API_KEY}&units=${currentUnits}&lang=kr`;
-
-    const res = await fetch(url);
+// OpenWeather 호출 (서버 함수 /api/ow 경유)
+async function owFetch(endpoint, params) {
+    const qs = new URLSearchParams({ endpoint, ...params });
+    const res = await fetch(`/api/ow?${qs}`);
     if (!res.ok) {
-        throw new Error("도시를 찾을 수 없거나 API 오류입니다.");
+        throw new Error(`OpenWeather(${endpoint}) 오류: ${res.status}`);
     }
     return res.json();
 }
 
+async function fetchWeather(city) {
+    return owFetch("weather", { q: city, units: currentUnits, lang: "kr" });
+}
+
 // 예보 데이터 가져오기 함수
+// 예보 데이터 가져오기
 async function fetchForecast(cityName) {
-    try {
-        const response = await fetch(
-            `${BASE_URL}/forecast?q=${cityName}&appid=${API_KEY}&units=${currentUnits}&lang=kr`
-        );
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data; // 데이터 반환
-        
-    } catch (error) {
-        console.error("예보 데이터 가져오기 실패:", error);
-        throw error; // 에러를 다시 던짐
-    }
+    return owFetch("forecast", { q: cityName, units: currentUnits, lang: "kr" });
 }
 
 // 미세먼지 데이터 가져오기
+// 미세먼지 데이터 가져오기
 async function fetchAirPollution(lat, lon) {
-    try {
-        const response = await fetch(
-            `${BASE_URL}/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`
-        );
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data;
-        
-    } catch (error) {
-        console.error("미세먼지 데이터 가져오기 실패:", error);
-        throw error;
-    }
+    return owFetch("air_pollution", { lat, lon });
 }
 
 // UI 업데이트 - 현재 날씨
 function displayCurrentWeather(data) {
     if (!data) return;
     
-    const { name } = data;
+    const name = data.displayName || data.name;
     const { temp, humidity } = data.main;
     const { speed } = data.wind;
     const weather = data.weather[0];
@@ -184,13 +158,9 @@ function displayCurrentWeather(data) {
     updateBackground(weather);
     updateOutfitSuggestion(temp, weather);
 
-    // 영어 도시명 저장 (API 응답에서 온 정확한 이름)
-    lastCityEnglish = name;
-
     // 지도 표시
     if (data.coord && data.coord.lat && data.coord.lon) {
-        console.log('지도 표시:', data.coord.lat, data.coord.lon, data.name);
-        displayMap(data.coord.lat, data.coord.lon, data.name);
+        displayMap(data.coord.lat, data.coord.lon, name);
     }
 }
 
@@ -270,12 +240,19 @@ function fromCelsius(c) {
 }
 
 // 현재 날씨/예보를 화면에 그린다 (국내는 기상청, 해외는 OpenWeather)
-async function renderWeather(current, forecast) {
+async function renderWeather(current, forecast, query) {
     let days = openWeatherToDaily(forecast);
     let source = "OpenWeather";
 
-    if (current.sys && current.sys.country === "KR" && current.coord) {
-        const kma = await fetchKmaWeather(current.coord.lat, current.coord.lon);
+    // 기상청 데이터와 한글 지명을 동시에 가져온다
+    const isKorea = current.sys && current.sys.country === "KR" && current.coord;
+    const [kma, koName] = await Promise.all([
+        isKorea ? fetchKmaWeather(current.coord.lat, current.coord.lon) : null,
+        current.coord ? fetchKoreanName(current.coord.lat, current.coord.lon, query) : null,
+    ]);
+    if (koName) current.displayName = koName;
+
+    if (isKorea) {
         if (kma && kma.current && typeof kma.current.temp === "number") {
             // 기존 화면 코드를 그대로 쓰기 위해 OpenWeather 응답 형식에 기상청 값을 덮어쓴다
             current.main.temp = fromCelsius(kma.current.temp);
@@ -305,8 +282,9 @@ async function renderWeather(current, forecast) {
         }
     }
 
-    lastCity = current.name;
+    lastCity = current.displayName || current.name;
     lastCityEnglish = current.name;
+    if (current.coord) lastCoords = { lat: current.coord.lat, lon: current.coord.lon };
 }
 
 // 추천 옷차림
@@ -367,7 +345,8 @@ async function handleSearch(cityFromClick) {
             ]);
         }
 
-        await renderWeather(current, forecast);
+        // 한글 지명은 한영 변환된 이름으로 조회 ("도쿄"로 바로 찾으면 하네다 공항이 나옴)
+        await renderWeather(current, forecast, city);
         addRecentCity(rawCity);
     } catch (err) {
         console.error(err);
@@ -379,10 +358,9 @@ function handleUnitToggle() {
     currentUnits = currentUnits === "metric" ? "imperial" : "metric";
     unitToggleBtn.textContent = currentUnits === "metric" ? "℃ / ℉" : "℉ / ℃";
 
-    // 단위 바꾸면 영어 도시명으로 다시 호출
-    if (lastCityEnglish) {
-        console.log('단위 변환으로 재검색:', lastCityEnglish);
-        handleSearch(lastCityEnglish);
+    // 단위 바꾸면 마지막으로 조회한 좌표로 다시 호출
+    if (lastCoords) {
+        handleLocationSearch(lastCoords.lat, lastCoords.lon);
     }
 }
 
@@ -587,7 +565,7 @@ async function handleLocationSearch(lat, lon) {
         ]);
 
         await renderWeather(current, forecast);
-        addRecentCity(current.name);
+        addRecentCity(current.displayName || current.name);
     } catch (err) {
         console.error('위치 기반 검색 오류:', err);
         showError("현재 위치의 날씨 정보를 가져올 수 없습니다.");
@@ -596,47 +574,36 @@ async function handleLocationSearch(lat, lon) {
 
 // 도시 이름 → 좌표 (OpenWeather 지오코딩 API, 한글 지명 검색 가능)
 async function geocodeCity(name) {
-    const res = await fetch(
-        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(name)}&limit=1&appid=${API_KEY}`
-    );
-    if (!res.ok) throw new Error(`지오코딩 실패: ${res.status}`);
-    const list = await res.json();
+    const list = await owFetch("geo_direct", { q: name, limit: 1 });
     if (!list.length) throw new Error("도시를 찾을 수 없습니다.");
     return { lat: list[0].lat, lon: list[0].lon };
 }
 
+// 한글 지명 조회 (OpenWeather 지오코딩의 local_names.ko). 실패하면 null
+// - 이름 검색: 검색어로 조회 (좌표로 찾으면 도쿄가 "신주쿠"처럼 구 이름으로 나오는 경우가 있음)
+// - 현재 위치: 좌표로 역조회
+async function fetchKoreanName(lat, lon, query) {
+    const koOf = (list) => (list && list[0] && list[0].local_names && list[0].local_names.ko) || null;
+    try {
+        if (query) {
+            const byName = koOf(await owFetch("geo_direct", { q: query, limit: 1 }));
+            if (byName) return byName;
+        }
+        return koOf(await owFetch("geo_reverse", { lat, lon, limit: 1 }));
+    } catch (err) {
+        console.warn("한글 지명 조회 실패:", err);
+        return null;
+    }
+}
+
 // 좌표로 현재 날씨 가져오기
 async function fetchWeatherByCoords(lat, lon) {
-    console.log('좌표로 날씨 요청:', lat, lon);
-    
-    const response = await fetch(
-        `${BASE_URL}/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=${currentUnits}&lang=kr`
-    );
-    
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('날씨 API 응답:', data);
-    return data;
+    return owFetch("weather", { lat, lon, units: currentUnits, lang: "kr" });
 }
 
 // 좌표로 예보 데이터 가져오기
 async function fetchForecastByCoords(lat, lon) {
-    console.log('좌표로 예보 요청:', lat, lon);
-    
-    const response = await fetch(
-        `${BASE_URL}/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=${currentUnits}&lang=kr`
-    );
-    
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('예보 API 응답:', data);
-    return data;
+    return owFetch("forecast", { lat, lon, units: currentUnits, lang: "kr" });
 }
 
 // 지도 표시 함수 (미세먼지 함수들 다음에 추가)

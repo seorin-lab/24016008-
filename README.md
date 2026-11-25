@@ -23,6 +23,25 @@
 13. 최근 검색 기능: 최근 검색한 도시 5개를 버튼으로 표시, 같은 도시는 한글 이름 기준으로 하나만 저장(예: 서울/seoul) <br>
 14. 반응형 화면: 휴대폰(320px~) 화면에서도 글자와 버튼이 깨지지 않도록 구성 <br>
 
+<h3> 📣 실행 화면 </h3>
+
+<b>시작 페이지</b> <br>
+<img src="screenshots/start.png" alt="시작 페이지" width="700"> <br><br>
+
+<table>
+  <tr>
+    <th>국내 도시 (기상청 단기예보)</th>
+    <th>해외 도시 (OpenWeather)</th>
+  </tr>
+  <tr>
+    <td><img src="screenshots/korea.png" alt="국내 도시 검색 결과 - 서울" width="400"></td>
+    <td><img src="screenshots/overseas.png" alt="해외 도시 검색 결과 - 파리" width="400"></td>
+  </tr>
+</table>
+
+<b>모바일 화면</b> <br>
+<img src="screenshots/mobile.png" alt="모바일 화면" width="700"> <br>
+
 <h3> 📣 사용 기술 </h3>
 1. HTML <br> 
 2. CSS <br>

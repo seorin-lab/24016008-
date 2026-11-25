@@ -200,7 +200,7 @@ function displayForecast(days) {
         forecastItem.className = "forecast-item";
         forecastItem.innerHTML = `
             <div>${month}/${day} (${weekday})</div>
-            <img src="https://openweathermap.org/img/wn/${d.icon}@2x.png" alt="${d.description}" style="width: 40px; height: 40px;">
+            <img class="forecast-icon" src="https://openweathermap.org/img/wn/${d.icon}@2x.png" alt="${d.description}">
             <div>${Math.round(d.tmin)}° / ${Math.round(d.tmax)}°</div>
             <div>${d.description}</div>
         `;

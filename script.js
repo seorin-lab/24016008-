@@ -3,7 +3,7 @@
 
 let currentUnits = "metric"; // "metric" = 섭씨, "imperial" = 화씨
 let lastCity = null;
-let lastCoords = null; // 단위 전환 시 같은 위치로 다시 조회하기 위해 저장
+let lastSearch = null; // 단위 전환 시 같은 방식으로 다시 조회: { query } 또는 { lat, lon }
 
 // 전역 변수에 영어 도시명도 저장
 let lastCityEnglish = null;
@@ -70,43 +70,58 @@ function updateBackground(weather) {
 }
 
 // localStorage - 최근 검색어
+// 항목 형식: { name: 화면에 보이는 한글 이름, query: 다시 검색할 검색어 } 또는 { name, lat, lon } (현재 위치)
+// 같은 장소는 화면 이름 기준으로 하나만 남긴다 ("서울"과 "seoul"이 따로 쌓이지 않도록)
 const STORAGE_KEY = "recentCities";
+const MAX_RECENT = 5;
 
 function loadRecentCities() {
     try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+        const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        if (!Array.isArray(arr)) return [];
+        // 예전 형식(문자열 배열)도 읽을 수 있게 변환
+        return arr
+            .map((c) => (typeof c === "string" ? { name: c, query: c } : c))
+            .filter((c) => c && c.name);
     } catch {
-    return [];
+        return [];
     }
 }
 
 function saveRecentCities(list) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch {
+        // 저장이 막힌 환경(시크릿 모드 등)에서는 무시
+    }
 }
 
-function addRecentCity(city) {
-    let list = loadRecentCities();
-    list = [city, ...list.filter((c) => c.toLowerCase() !== city.toLowerCase())];
-    if (list.length > 5) list = list.slice(0, 5);
-    saveRecentCities(list);
+// entry: { name, query } 또는 { name, lat, lon }
+// aliases: 같은 장소를 가리키는 다른 표기 (사용자가 입력한 검색어, 영어 이름 등) → 예전 항목 중 일치하면 제거
+function addRecentCity(entry, aliases = []) {
+    const norm = (v) => String(v || "").trim().toLowerCase();
+    const keys = new Set([entry.name, entry.query, ...aliases].map(norm).filter(Boolean));
+
+    const rest = loadRecentCities().filter((c) => !keys.has(norm(c.name)) && !keys.has(norm(c.query)));
+    saveRecentCities([entry, ...rest].slice(0, MAX_RECENT));
     renderRecentCities();
 }
 
 function renderRecentCities() {
-    const list = loadRecentCities();
     recentListEl.innerHTML = "";
-    list.forEach((city) => {
-    const btn = document.createElement("button");
-    btn.className = "chip";
-    btn.textContent = city;
-    btn.addEventListener("click", () => {
-        cityInput.value = city;
-        handleSearch(city);
-    });
-    recentListEl.appendChild(btn);
+    loadRecentCities().forEach((city) => {
+        const btn = document.createElement("button");
+        btn.className = "chip";
+        btn.textContent = city.name;
+        btn.addEventListener("click", () => {
+            if (city.query) {
+                cityInput.value = city.query;
+                handleSearch(city.query);
+            } else if (city.lat != null && city.lon != null) {
+                handleLocationSearch(city.lat, city.lon);
+            }
+        });
+        recentListEl.appendChild(btn);
     });
 }
 
@@ -284,7 +299,6 @@ async function renderWeather(current, forecast, query) {
 
     lastCity = current.displayName || current.name;
     lastCityEnglish = current.name;
-    if (current.coord) lastCoords = { lat: current.coord.lat, lon: current.coord.lon };
 }
 
 // 추천 옷차림
@@ -317,7 +331,7 @@ async function renderWeather(current, forecast, query) {
 }
 
 // 이벤트 핸들러
-async function handleSearch(cityFromClick) {
+async function handleSearch(cityFromClick, { addToRecent = true } = {}) {
     const rawCity = cityFromClick || cityInput.value.trim();
     if (!rawCity) {
         showError("도시 이름을 입력해 주세요.");
@@ -347,7 +361,13 @@ async function handleSearch(cityFromClick) {
 
         // 한글 지명은 한영 변환된 이름으로 조회 ("도쿄"로 바로 찾으면 하네다 공항이 나옴)
         await renderWeather(current, forecast, city);
-        addRecentCity(rawCity);
+        lastSearch = { query: rawCity };
+        if (addToRecent) {
+            addRecentCity(
+                { name: current.displayName || current.name, query: rawCity },
+                [rawCity, city, current.name]
+            );
+        }
     } catch (err) {
         console.error(err);
         showError(`"${rawCity}"의 날씨 정보를 찾을 수 없습니다.`);
@@ -358,9 +378,11 @@ function handleUnitToggle() {
     currentUnits = currentUnits === "metric" ? "imperial" : "metric";
     unitToggleBtn.textContent = currentUnits === "metric" ? "℃ / ℉" : "℉ / ℃";
 
-    // 단위 바꾸면 마지막으로 조회한 좌표로 다시 호출
-    if (lastCoords) {
-        handleLocationSearch(lastCoords.lat, lastCoords.lon);
+    // 단위 바꾸면 마지막 검색을 같은 방식으로 다시 호출 (최근 검색 순서는 그대로)
+    if (lastSearch && lastSearch.query) {
+        handleSearch(lastSearch.query, { addToRecent: false });
+    } else if (lastSearch) {
+        handleLocationSearch(lastSearch.lat, lastSearch.lon, { addToRecent: false });
     }
 }
 
@@ -554,7 +576,7 @@ function displayAirPollution(data) {
 }
 
 // 좌표 기반 날씨 검색 함수
-async function handleLocationSearch(lat, lon) {
+async function handleLocationSearch(lat, lon, { addToRecent = true } = {}) {
     try {
         clearError();
         console.log('좌표 기반 검색 시작:', lat, lon);
@@ -565,7 +587,13 @@ async function handleLocationSearch(lat, lon) {
         ]);
 
         await renderWeather(current, forecast);
-        addRecentCity(current.displayName || current.name);
+        lastSearch = { lat, lon };
+        if (addToRecent) {
+            addRecentCity(
+                { name: current.displayName || current.name, lat, lon },
+                [current.name]
+            );
+        }
     } catch (err) {
         console.error('위치 기반 검색 오류:', err);
         showError("현재 위치의 날씨 정보를 가져올 수 없습니다.");

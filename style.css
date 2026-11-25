@@ -389,3 +389,41 @@ body[data-theme="night"] .recent-section h2 {
 .card > :last-child {
     margin-bottom: 0;
 }
+
+/* ===== 작은 화면(휴대폰) 보정 ===== */
+.btn {
+    white-space: nowrap; /* ℃ / ℉ 버튼이 두 줄로 깨지지 않도록 */
+}
+
+.pollutant-label,
+.pollutant-value {
+    word-break: keep-all; /* "초미세먼지"가 단어 중간에서 끊기지 않도록 */
+}
+
+.pollutant-value {
+    white-space: nowrap;
+}
+
+@media (max-width: 400px) {
+    .header {
+        gap: 8px;
+    }
+
+    .logo {
+        padding: 10px 14px;
+    }
+
+    .logo-main {
+        font-size: 1.05rem;
+        white-space: nowrap;
+    }
+
+    .pollutant-details {
+        gap: 6px;
+    }
+
+    .pollutant-item {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
+}
